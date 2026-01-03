@@ -1,27 +1,21 @@
-import bencode.BencodeTest;
+
+import test.BencoderTest;
 
 import java.util.Scanner;
 
 public class Main {
     public static void main(String[] args) {
-        bencoderTest();
+        testBencoderTest();
 
     }
 
-    public static void bencoderTest(){
-        Scanner scanner = new Scanner(System.in);
-        BencodeTest tester = new BencodeTest();
+    public static void testBencoderTest(){
+        BencoderTest bencoderTest = new BencoderTest();
 
-        System.out.print("Bencode로 인코딩할 문자열을 입력하세요: ");
-        String input = scanner.nextLine();
+        String announce = " http://tracker.example.com";
+        String filePath = "encodeFile.txt";
 
-        // 1. 입력받은 문자열로 인코딩 테스트 수행
-        tester.runBencodeTest(input);
-
-        // 2. 디코딩 테스트 수행 및 결과 확인
-        tester.runBdecodeTest();
-
-        scanner.close();
+        bencoderTest.runBencoderTest(announce, filePath);
     }
-    
+
 }

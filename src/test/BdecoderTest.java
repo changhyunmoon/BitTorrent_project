@@ -42,7 +42,7 @@ public class BdecoderTest {
 
             logAndWrite(writer, "========================================");
 
-            System.out.println("\n✅ 디코딩 결과가 '" + outputFilePath + "'에 저장되었습니다.");
+            System.out.println("\n✅ 디코딩 결과가 '" + decodedFilePath + "'에 저장되었습니다.");
 
         } catch (FileNotFoundException e) {
             System.err.println("❌ 파일을 찾을 수 없습니다: " + torrentFilePath);

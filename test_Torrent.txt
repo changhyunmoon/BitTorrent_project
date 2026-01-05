@@ -1,0 +1,14 @@
+======= TORRENT FILE STRUCTURE =======
+creation date: 1767612904
+comment: first torrent file create
+created by: mch
+announce: http://tracker.example.com/announce
+info: 
+  pieces: ¬Ð¯(Bêt|
+  name: test_directory
+  files: 
+      path: 
+test.txt
+      length: 35
+  piece length: 262144
+======================================

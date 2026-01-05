@@ -1,31 +1,23 @@
 
-import test.BdecoderTest;
-import test.BencoderTest;
 
+import torrent.Bencoder;
+import torrent.GenrateTorrent;
+
+import java.io.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Scanner;
+
+import static test.testGenrateTorrent.runTestGenrateTorret;
 
 public class Main {
     public static void main(String[] args) {
-        //testBencoderTest();
-        //testBdecodeTest();
+
+        //.torrent 파일이 잘 생성되는지 확인
+        runTestGenrateTorret();
     }
 
-    public static void testBencoderTest(){
-        BencoderTest bencoderTest = new BencoderTest();
 
-        String announce = " http://tracker.example.com";
-        String filePath = "testFile.txt";
-        String encodedFilePath = "encoded";
 
-        bencoderTest.runBencoderTest(announce, filePath, encodedFilePath);
-    }
-
-    public static void testBdecodeTest(){
-        BdecoderTest bdecoderTest = new BdecoderTest();
-
-        String torrentFilePath = "encoded.torrent";
-        String decodedFilePath = "decoded.txt";
-
-        bdecoderTest.runBdecoderTest(torrentFilePath, decodedFilePath);
-    }
 }

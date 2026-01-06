@@ -4,92 +4,128 @@ package torrent;
 import java.io.*;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 
 public class GenrateTorrent {
 
-    // 기본 조각 크기: 256KB (요구사항에 따라 가변적 설정 가능)
-    private static final int DEFAULT_PIECE_LENGTH = 256 * 1024;
 
-    /**
-     * 단일 또는 다중 파일을 위한 토렌트 생성 메소드
-     */
-    public Map<String, Object> createTorrent(String trackerUrl, String directoryName, List<File> files, String createdBy, String comment)
+
+     //단일 또는 다중 파일을 위한 토렌트 생성 메소드
+
+    public Map<String, Object> createTorrent(
+            String torrentName,
+            String trackerUrl,
+            String fileDirectory,
+            String createdBy,
+            String comment,
+            int pieceLength,
+            boolean isPrivate,
+            List<String> fileNames
+            )
             throws Exception {
-        System.out.println("createTorrent start");
-        System.out.println("params -> trackerUrl = " + trackerUrl + ", directoryName = " + directoryName + ", files = " + files + ", createdBy = " + createdBy + ", comment = " + comment);
-        System.out.println("");
+        long now = System.currentTimeMillis() / 1000;
+
+        System.out.println("---.torrent 파일 생성 시작---");
+        System.out.println("torrentName (토렌트 파일의 이름) = " + torrentName +
+                "\ntrackerUrl (트래커 주소) = " + trackerUrl +
+                "\nfileDirectory (토렌트 파일이 저장되오 있는 디렉토리 이름) = " + fileDirectory +
+                "\ncreated on (토렌트 파일 생성 일자. 리눅스 시계) = " + now +
+                "\ncreatedBy (토렌트 파일 생성자) = " + createdBy +
+                "\ncomment (생성자가 적어 놓은 설명) = " + comment +
+                "\npieceLength (파일 조각의 크기) = " + pieceLength +
+                "\nisPrivate (공개, 비공개) = " + isPrivate +
+                "\nfileNames (공유하는 실제 파일 이름들) = " + fileNames);
+        System.out.println("-------------------------------------------------------------------");
+
         Map<String, Object> torrent = new HashMap<>();
 
         // 1. 메타데이터 (Meta Data) 설정
-        torrent.put("announce", trackerUrl);
-        torrent.put("created by", createdBy);
-        torrent.put("comment", comment);
-        torrent.put("creation date", System.currentTimeMillis() / 1000); // Unix Timestamp
+        torrent.put("torrent name", torrentName);                       //토렌트 파일의 이름
+        //밑에서 info hash 구현
+        torrent.put("announce", trackerUrl);                            //트래커 주소
 
-        // 2. Info 딕셔너리 구성
-        Map<String, Object> info = new HashMap<>();
-        info.put("name", directoryName);
-        info.put("piece length", DEFAULT_PIECE_LENGTH);
+        // 2. Meta data
+        torrent.put("file directory", fileDirectory);                   //토렌트 파일이 저장되어 있는 디렉토리 이름
+        torrent.put("created on", now);   //토렌트 파일 생성 일자
+        torrent.put("created by", createdBy);                           //토렌트 파일 생성자 정보
+        torrent.put("comment", comment);                                //토렌트 파일 생성자가 적어 놓은 설명
+        torrent.put("piece length", pieceLength);                       //공유에 사용할 파일 조각의 크기
+        torrent.put("file names", fileNames);                           //공유하는 실제 파일 이름들
 
-        // 3. 파일 목록 처리 (Files Filename)
-        List<Map<String, Object>> filesList = new ArrayList<>();
-        for (File file : files) {
-            Map<String, Object> fileMap = new HashMap<>();
-            fileMap.put("length", file.length());
-            // 비트토렌트 규격상 path는 리스트 형태여야 함
-            fileMap.put("path", Collections.singletonList(file.getName()));
-            filesList.add(fileMap);
-        }
-        info.put("files", filesList);
-
-        // 4. 조각 해싱 (Piece Hashing) 실행
-        // 모든 파일의 내용을 순서대로 이어 붙여서 조각낸 결과값을 가져옴
-        byte[] pieces = calculatePiecesHash(files, DEFAULT_PIECE_LENGTH);
-        info.put("pieces", pieces);
-
-        torrent.put("info", info);
+        //info hash 계산
+        byte[] infoHash = calInfoHash(fileDirectory, pieceLength, isPrivate, fileNames);
+        torrent.put("info hash", infoHash);
 
         return torrent;
-
-        // 5. Bencoding 실행 (최종 바이트 배열 반환)
-        //return Bencoder.encode(torrent);
     }
 
-    /**
-     * 모든 파일을 하나의 가상 데이터 흐름으로 보고 조각별 SHA-1 해시를 계산
-     */
-    private byte[] calculatePiecesHash(List<File> files, int pieceLength)
-            throws IOException, NoSuchAlgorithmException {
+    //infoHash 생성 함수
+    //사용되는 변수들 : fileDirectory, pieceLength, fileNames
+    public byte[] calInfoHash(
+            String fileDirectory,
+            int pieceLength,
+            boolean isPrivate,
+            List<String> fileNames) throws Exception{
+        System.out.println("---Info Hash 계산 시작---");
+        //info 딕셔너리 구성
+        Map<String, Object> info = new HashMap<>();
+        info.put("file directory", fileDirectory);
+        info.put("piece length", pieceLength);
+        info.put("is private", isPrivate);
+        info.put("file names", fileNames);
+        System.out.println("Info Map 구성 완료");
+        System.out.println("file directory : " + fileDirectory);
+        System.out.println("piece length : " + pieceLength);
+        System.out.println("is private (1이면 비공개, 0이면 공개) : " + isPrivate);
+        System.out.println("file names : " + fileNames);
 
+        //info 맵 bencode 수행
+        byte[] bencodedInfoHash = Bencoder.encode(info);
+        System.out.println("info Hash bencode 수행 완료 : " + bencodedInfoHash);
+
+        //SHA-1 해시 계산
+        MessageDigest sha1InfoHash = MessageDigest.getInstance("SHA-1");
+        byte[] res = sha1InfoHash.digest(bencodedInfoHash);
+        System.out.println("Info Hash 계산 완료 : " + res);
+
+        return res;
+    }
+
+    //파일의 각 조각들에 대한 hash 값 계산해주는 함수
+    public byte[] calPiecesHash(String fileDirectory, List<String> fileNames, int pieceLength) throws Exception{
+        //MessageDigest는 자바에서 데이터 지문을 만드는 클래스
         MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
-        ByteArrayOutputStream piecesStream = new ByteArrayOutputStream();
+        //ByteArrayOutputStream는 데이터를 메모리 내에 임시로 모아두는 바구니
+        ByteArrayOutputStream piecesOutput = new ByteArrayOutputStream();
 
         byte[] buffer = new byte[pieceLength];
-        int bufferPos = 0;
+        int currentPos = 0;
 
-        for (File file : files) {
-            try (InputStream is = new BufferedInputStream(new FileInputStream(file))) {
+        for(String fileName : fileNames){
+            File file = new File(fileDirectory, fileName);
+            try(InputStream is = new BufferedInputStream(new FileInputStream(file))){
                 int bytesRead;
-                while ((bytesRead = is.read(buffer, bufferPos, pieceLength - bufferPos)) != -1) {
-                    bufferPos += bytesRead;
-
-                    // 버퍼가 꽉 찼을 때 (한 조각이 완성되었을 때) 해싱
-                    if (bufferPos == pieceLength) {
-                        sha1.update(buffer, 0, pieceLength);
-                        piecesStream.write(sha1.digest());
-                        bufferPos = 0; // 버퍼 초기화
+                //파일을 조각 크기에 맞춰 읽기
+                while((bytesRead = is.read(buffer, currentPos, pieceLength - currentPos)) != -1){
+                    currentPos += bytesRead;
+                    //조각 하나 다 읽어들이면 SHA-1 해싱
+                    if(currentPos == pieceLength){
+                        piecesOutput.write(sha1.digest(buffer));
+                        currentPos = 0;
                     }
                 }
             }
         }
-
-        // 마지막 남은 자투리 데이터가 있다면 해싱 (Last Piece)
-        if (bufferPos > 0) {
-            sha1.update(buffer, 0, bufferPos);
-            piecesStream.write(sha1.digest());
+        // 마지막 남은 자투리 조각 처리
+        if (currentPos > 0) {
+            byte[] finalPiece = new byte[currentPos];
+            System.arraycopy(buffer, 0, finalPiece, 0, currentPos);
+            piecesOutput.write(sha1.digest(finalPiece));
         }
 
-        return piecesStream.toByteArray();
+        return piecesOutput.toByteArray();
     }
+
 }

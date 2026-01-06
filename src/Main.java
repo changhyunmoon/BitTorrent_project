@@ -1,5 +1,6 @@
 
 
+import test.TestGenrateTorrent;
 import torrent.Bencoder;
 import torrent.GenrateTorrent;
 
@@ -15,7 +16,8 @@ public class Main {
 
 
         //토렌트 파일 생성
-
+        TestGenrateTorrent test = new TestGenrateTorrent();
+        test.runTestGenerateTorrent();
 
     }
 

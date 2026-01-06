@@ -15,19 +15,12 @@ public class GenrateTorrent {
      //단일 또는 다중 파일을 위한 토렌트 생성 메소드
 
     public Map<String, Object> createTorrent(
-            String torrentName,
-            String trackerUrl,
-            String fileDirectory,
-            String createdBy,
-            String comment,
-            int pieceLength,
-            boolean isPrivate,
-            List<String> fileNames
-            )
-            throws Exception {
+            String torrentName, String trackerUrl, String fileDirectory, String createdBy,
+            String comment, int pieceLength, boolean isPrivate, List<String> fileNames
+    )throws Exception {
         long now = System.currentTimeMillis() / 1000;
 
-        System.out.println("---.torrent 파일 생성 시작---");
+        System.out.println("\n\n======= [torrent file create start] =======");
         System.out.println("torrentName (토렌트 파일의 이름) = " + torrentName +
                 "\ntrackerUrl (트래커 주소) = " + trackerUrl +
                 "\nfileDirectory (토렌트 파일이 저장되오 있는 디렉토리 이름) = " + fileDirectory +
@@ -37,7 +30,7 @@ public class GenrateTorrent {
                 "\npieceLength (파일 조각의 크기) = " + pieceLength +
                 "\nisPrivate (공개, 비공개) = " + isPrivate +
                 "\nfileNames (공유하는 실제 파일 이름들) = " + fileNames);
-        System.out.println("-------------------------------------------------------------------");
+        System.out.println("=====================================");
 
         Map<String, Object> torrent = new HashMap<>();
 
@@ -68,7 +61,7 @@ public class GenrateTorrent {
             int pieceLength,
             boolean isPrivate,
             List<String> fileNames) throws Exception{
-        System.out.println("---Info Hash 계산 시작---");
+        System.out.println("\n\n======= [info hash calculate start] =======");
         //info 딕셔너리 구성
         Map<String, Object> info = new HashMap<>();
         info.put("file directory", fileDirectory);
@@ -89,43 +82,43 @@ public class GenrateTorrent {
         MessageDigest sha1InfoHash = MessageDigest.getInstance("SHA-1");
         byte[] res = sha1InfoHash.digest(bencodedInfoHash);
         System.out.println("Info Hash 계산 완료 : " + res);
+        System.out.println("=====================================");
 
         return res;
     }
 
-    //파일의 각 조각들에 대한 hash 값 계산해주는 함수
-    public byte[] calPiecesHash(String fileDirectory, List<String> fileNames, int pieceLength) throws Exception{
-        //MessageDigest는 자바에서 데이터 지문을 만드는 클래스
-        MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
-        //ByteArrayOutputStream는 데이터를 메모리 내에 임시로 모아두는 바구니
-        ByteArrayOutputStream piecesOutput = new ByteArrayOutputStream();
+    //torrent 파일 출력
+    public void showTorrent(Map<String, Object> torrent) {
+        System.out.println("\n\n======= [TORRENT MAP CONTENT] =======");
 
-        byte[] buffer = new byte[pieceLength];
-        int currentPos = 0;
+        for (Map.Entry<String, Object> entry : torrent.entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
 
-        for(String fileName : fileNames){
-            File file = new File(fileDirectory, fileName);
-            try(InputStream is = new BufferedInputStream(new FileInputStream(file))){
-                int bytesRead;
-                //파일을 조각 크기에 맞춰 읽기
-                while((bytesRead = is.read(buffer, currentPos, pieceLength - currentPos)) != -1){
-                    currentPos += bytesRead;
-                    //조각 하나 다 읽어들이면 SHA-1 해싱
-                    if(currentPos == pieceLength){
-                        piecesOutput.write(sha1.digest(buffer));
-                        currentPos = 0;
+            if (value instanceof Map) {
+                // info 딕셔너리 내부 출력
+                System.out.println("▶ " + key + " (Map):");
+                Map<?, ?> subMap = (Map<?, ?>) value;
+                for (Map.Entry<?, ?> subEntry : subMap.entrySet()) {
+                    Object subValue = subEntry.getValue();
+                    if (subValue instanceof byte[]) {
+                        System.out.println("   - " + subEntry.getKey() + " (Binary): " + Arrays.toString((byte[]) subValue));
+                    } else {
+                        System.out.println("   - " + subEntry.getKey() + ": " + subValue);
                     }
                 }
+            } else if (value instanceof List) {
+                // 파일 리스트 등 출력
+                System.out.println("▶ " + key + " (List): " + value);
+            } else if (value instanceof byte[]) {
+                // info hash 등 바이너리 데이터 직접 출력
+                System.out.println("▶ " + key + " (Binary): " + value);
+            } else {
+                // 일반 문자열이나 숫자 출력
+                System.out.println("▶ " + key + ": " + value);
             }
         }
-        // 마지막 남은 자투리 조각 처리
-        if (currentPos > 0) {
-            byte[] finalPiece = new byte[currentPos];
-            System.arraycopy(buffer, 0, finalPiece, 0, currentPos);
-            piecesOutput.write(sha1.digest(finalPiece));
-        }
 
-        return piecesOutput.toByteArray();
+        System.out.println("=====================================\n\n");
     }
-
 }

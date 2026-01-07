@@ -4,6 +4,7 @@ package torrent;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
+import java.lang.reflect.Array;
 import java.security.MessageDigest;
 import java.util.*;
 
@@ -27,70 +28,75 @@ public class TorrentGenerator {
 //        isprivate(int) :
 
     public Map<String, Object> generateMultiFileTorrent(
-            String rootFolder, String trackerUrl, List<String> announceList, List<String> fileNames,
+            String rootFolder, String trackerUrl, List<String> announceList, List<String> filePaths,
             String createdBy, String comment, int pieceLength, boolean isPrivate, String encoding
     ) throws Exception {
-        System.out.println("==========Torrent file Generate Start==========");
-        //1. pieces hash 계산
-        byte[] pieces = calPieces(rootFolder, fileNames, pieceLength);
+        System.out.println("========== Torrent file Generate Start ==========");
 
-        //2. info 구성
-        Map<String, Object> info = new HashMap<>();
-        info.put("root-folder", rootFolder);
-        info.put("piece-length", pieceLength);
+        // 1. pieces hash 계산
+        byte[] pieces = calPieces(rootFolder, filePaths, pieceLength);
+
+        // 2. info 구성 (TreeMap 사용 - 사전순 정렬 필수)
+        Map<String, Object> info = new TreeMap<>();
+        info.put("files", generateFilesList(rootFolder, filePaths));
+        info.put("root-folder", rootFolder); // 폴더명
+        info.put("piece length", (long) pieceLength); // 표준: piece length
         info.put("pieces", pieces);
-        info.put("private", isPrivate ? 1 : 0);
+        info.put("private", isPrivate ? 1L : 0L);
 
-        //다중 파일 files 리스트 생성
-        List<Map<String, Object>> files = new ArrayList<>();
-        for(String fileName : fileNames){
-            Map<String, Object> fileInfo = new HashMap<>();
-            File file = new File(rootFolder, fileName);
-            fileInfo.put("length", file.length());
-            fileInfo.put("path", fileName);
-            System.out.println("length : " + file.length() + ", path : " + fileName);
-            files.add(fileInfo);
-        }
-        info.put("files", files);
-
-        //torrent 딕셔너리 구성
-        Map<String, Object> torrent = new HashMap<>();
+        // 3. 전체 토렌트 구성 (TreeMap 사용)
+        Map<String, Object> torrent = new TreeMap<>();
         torrent.put("announce", trackerUrl);
         if (announceList != null && !announceList.isEmpty()) {
             torrent.put("announce-list", announceList);
-        }else{
-            torrent.put("announce-list", null);
         }
+        torrent.put("comment", comment);
         torrent.put("created by", createdBy);
         torrent.put("creation date", System.currentTimeMillis() / 1000);
-        torrent.put("comment", comment);
         torrent.put("encoding", encoding);
-        torrent.put("info", info); // info 딕셔너리를 통째로 포함
+        torrent.put("info", info);
 
         System.out.println("====================================================");
-    return torrent;
-
+        return torrent;
     }
 
-    //pieces hash 계산
-    public byte[] calPieces(String fileDirectory, List<String> fileNames, int pieceLength) throws Exception {
+    // path
+    // "music/pop/song.mp3" -> ["music", "pop", "song.mp3"]
+    private List<Map<String, Object>> generateFilesList(String rootFolder, List<String> filePaths) {
+        List<Map<String, Object>> files = new ArrayList<>();
+
+        for(String filePath : filePaths){
+            File file = new File(rootFolder, filePath);
+            if(!file.exists()) continue;
+
+            Map<String, Object> fileInfo = new TreeMap<>();
+            fileInfo.put("length", file.length());
+
+            //경로 분리 로직
+            List<String> pathList = Arrays.stream(filePath.split("[/\\\\]"))
+                    .filter(s->!s.isEmpty())
+                    .toList();
+            fileInfo.put("path", pathList);
+            files.add(fileInfo);
+        }
+        return files;
+    }
+
+    // pieces hash 계산 (기존 로직 유지)
+    public byte[] calPieces(String fileDirectory, List<String> filePaths, int pieceLength) throws Exception {
+        System.out.println("===============Cal pieces Hash=============");
         ByteArrayOutputStream allHashes = new ByteArrayOutputStream();
         MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
-
         byte[] buffer = new byte[pieceLength];
         int bufferOffset = 0;
 
-        // 파일을 순서대로 읽어서 하나의 거대한 파일처럼 처리
-        for (String fileName : fileNames) {
+        for (String fileName : filePaths) {
             File file = new File(fileDirectory, fileName);
             if (!file.exists()) continue;
-
             try (FileInputStream fis = new FileInputStream(file)) {
                 int read;
                 while ((read = fis.read(buffer, bufferOffset, pieceLength - bufferOffset)) != -1) {
                     bufferOffset += read;
-
-                    // 버퍼가 pieceLength만큼 차면 즉시 해시 계산
                     if (bufferOffset == pieceLength) {
                         allHashes.write(sha1.digest(buffer));
                         sha1.reset();
@@ -99,54 +105,42 @@ public class TorrentGenerator {
                 }
             }
         }
-
-        // 마지막 남은 자투리 데이터 처리
         if (bufferOffset > 0) {
             sha1.update(buffer, 0, bufferOffset);
             allHashes.write(sha1.digest());
         }
-
         return allHashes.toByteArray();
     }
 
-    //torrent 파일 bencoding
-    public byte[] bencodeTorrent(Map<String, Object> torrent) throws Exception{
+    // info hash 계산
+    public byte[] calInfoHash(byte[] btorrent) throws Exception {
+        System.out.println("========== Info Hash Calculation Start ==========");
 
-        byte[] res = Bencoder.encode(torrent);
-
-        return res;
-    }
-    //torrent 파일 bdecoding
-    public Map<String, Object> bdecodeTorrent(byte[] btorrent) throws Exception{
+        // 디코딩 단계 (수정된 Bdecoder가 TreeMap을 반환하므로 순서가 유지됨)
         Map<String, Object> torrent = Bdecoder.decode(btorrent);
-        return torrent;
-    }
-
-    //info hash 계산
-    //bencode 된 torrent 파일에서 계산
-    public byte[] calInfoHash(byte[] btorrent) throws Exception{
-        System.out.println("==========Hash info calculate Start==========");
-
-        //bencode된 torrent -> decode 된 torrent
-        Map<String, Object> torrent = Bdecoder.decode(btorrent);
-
-        //info 추출
         Object info = torrent.get("info");
-        if(info == null) throw new Exception("No info section found from torrent file");
 
-        //info 부분만 다시 bencode
+        // 다시 인코딩 (TreeMap 덕분에 키가 정렬되어 인코딩됨)
         byte[] bencodeInfo = Bencoder.encode(info);
-        //해싱
+
         MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
         byte[] infoHash = sha1.digest(bencodeInfo);
 
-        System.out.println("info 정보 출력 : " + info);
-        System.out.println("info hash 값 : " + infoHash);
-        System.out.println("=================================================");
+        System.out.println("Info Hash (Hex): " + infoHash);
         return infoHash;
     }
 
 
+
+    public byte[] bencodeTorrent(Map<String, Object> torrent) throws Exception {
+        return Bencoder.encode(torrent);
+    }
+    public Map<String, Object> bdecodeTorrent(byte[] encodedTorrent) throws Exception{
+        return Bdecoder.decode(encodedTorrent);
+    }
+
+
+    //--------------------------------------------------------------------------------------------------
     //torrent 파일 출력
     public void printTorrent(Map<String, Object> torrent){
         System.out.println("==========Show Torrent==========");
@@ -161,20 +155,24 @@ public class TorrentGenerator {
             map.forEach((k, v) -> {
                 System.out.print(space + "▶ " + k + " : ");
                 if (v instanceof byte[]) {
-                    // 바이트 배열을 16진수 변환 없이 [byte, byte, ...] 형태로 출력
-                    System.out.println(Arrays.toString((byte[]) v));
+                    System.out.println("[byte array, length: " + ((byte[]) v).length + "]");
                 } else if (v instanceof Map || v instanceof List) {
-                    System.out.println();
+                    System.out.println(); // 복합 객체는 다음 줄부터
                     printRecursive(v, indent + 1);
                 } else {
-                    System.out.println(v);
+                    System.out.println(v); // 일반 값 출력
                 }
             });
         } else if (obj instanceof List) {
             List<?> list = (List<?>) obj;
-            for (int i = 0; i < list.size(); i++) {
-                System.out.println(space + "  [" + i + "]");
-                printRecursive(list.get(i), indent + 2);
+            // 리스트의 요소가 문자열이면 한 줄에 출력 (path 처리용)
+            if (!list.isEmpty() && list.get(0) instanceof String) {
+                System.out.println(space + "  " + list.toString());
+            } else {
+                for (int i = 0; i < list.size(); i++) {
+                    System.out.println(space + "  [" + i + "]");
+                    printRecursive(list.get(i), indent + 2);
+                }
             }
         }
     }

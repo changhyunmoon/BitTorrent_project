@@ -1,13 +1,7 @@
 package torrent;
 
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.PushbackInputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.TreeMap;
+import java.util.*;
 
 public class Bdecoder {
 
@@ -18,21 +12,16 @@ public class Bdecoder {
         this.data = data;
     }
 
-    /**
-     * 바이트 배열을 입력받아 전체를 디코딩하고 맵으로 반환합니다.
-     */
-    @SuppressWarnings("unchecked")
     public static Map<String, Object> decode(byte[] data) throws Exception {
         Bdecoder decoder = new Bdecoder(data);
-        Object result = decoder.decodeObject();
-        if (!(result instanceof Map)) {
-            throw new Exception("Root element is not a dictionary");
-        }
-        return (Map<String, Object>) result;
+        return (Map<String, Object>) decoder.decodeObject();
     }
 
     private Object decodeObject() throws Exception {
-        byte c = data[index++];
+        if (index >= data.length) return null;
+
+        byte c = data[index];
+        // 중요: 여기서 index++를 하지 않습니다. 각 메서드가 시작 문자를 직접 확인합니다.
         if (c == 'i') {
             return decodeInteger();
         } else if (c == 'l') {
@@ -40,16 +29,15 @@ public class Bdecoder {
         } else if (c == 'd') {
             return decodeDictionary();
         } else if (Character.isDigit(c)) {
-            index--; // 숫자는 길이를 읽기 위해 다시 뒤로 한 칸
             return decodeBytes();
         }
-        throw new Exception("Invalid bencode type: " + (char) c);
+        throw new Exception("지원하지 않는 타입: " + (char) c + " (index: " + index + ")");
     }
 
-    // 정수 디코딩: i123e -> 123L
     private Long decodeInteger() throws Exception {
+        index++; // 'i' 건너뛰기
         int start = index;
-        while (data[index] != 'e') {
+        while (index < data.length && data[index] != 'e') {
             index++;
         }
         String val = new String(data, start, index - start, StandardCharsets.UTF_8);
@@ -57,41 +45,46 @@ public class Bdecoder {
         return Long.parseLong(val);
     }
 
-    // 바이트 배열 디코딩: 5:hello -> byte[]
     private byte[] decodeBytes() throws Exception {
         int start = index;
-        while (data[index] != ':') {
+        while (index < data.length && data[index] != ':') {
             index++;
         }
-        int length = Integer.parseInt(new String(data, start, index - start, StandardCharsets.UTF_8));
+        // 숫자 부분만 추출 (예: "8:encoding"에서 "8"만)
+        String lenStr = new String(data, start, index - start, StandardCharsets.UTF_8);
+        int length = Integer.parseInt(lenStr);
+
         index++; // ':' 건너뛰기
 
         byte[] result = new byte[length];
         System.arraycopy(data, index, result, 0, length);
-        index += length;
+        index += length; // 데이터 길이만큼 정확히 이동
         return result;
     }
 
-    // 리스트 디코딩: l...e -> List
     private List<Object> decodeList() throws Exception {
+        index++; // 'l' 건너뛰기
         List<Object> list = new ArrayList<>();
-        while (data[index] != 'e') {
+        while (index < data.length && data[index] != 'e') {
             list.add(decodeObject());
         }
-        index++; // 'e' 건너뛰기
+        index++; // 리스트 끝 'e' 건너뛰기
         return list;
     }
 
-    // 딕셔너리 디코딩: d...e -> TreeMap (키 정렬 보장)
     private Map<String, Object> decodeDictionary() throws Exception {
+        index++; // 'd' 건너뛰기
         Map<String, Object> map = new TreeMap<>();
-        while (data[index] != 'e') {
-            // 키는 무조건 byte string이므로 문자열로 변환
-            String key = new String(decodeBytes(), StandardCharsets.UTF_8);
+        while (index < data.length && data[index] != 'e') {
+            // 딕셔너리의 키는 항상 문자열(byte[])입니다.
+            byte[] keyBytes = decodeBytes();
+            String key = new String(keyBytes, StandardCharsets.UTF_8);
+
+            // 값 디코딩
             Object value = decodeObject();
             map.put(key, value);
         }
-        index++; // 'e' 건너뛰기
+        index++; // 딕셔너리 끝 'e' 건너뛰기
         return map;
     }
 }
